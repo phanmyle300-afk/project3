@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receipt OCR Tracker & CustomPainter Canvas</title>
+  <link rel="stylesheet" href="./src/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <div class="logo-icon">🧾</div>
+        <div>
+          <h1>Smart Receipt OCR Tracker</h1>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Flutter CustomPainter & Heuristic OCR Engine</p>
+        </div>
+      </div>
+      <button id="openScanModalBtn" class="btn-primary">
+        📸 Quét Hóa Đơn OCR
+      </button>
+    </header>
+
+    <!-- Top Canvas Visualizations Grid -->
+    <div class="grid-layout">
+      <!-- Donut Chart Canvas -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Phân bổ Chi tiêu</h2>
+          <span class="badge badge-green">Canvas Donut</span>
+        </div>
+        <canvas id="donutChartCanvas"></canvas>
+      </div>
+
+      <!-- Weekly Bar Chart Canvas -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Chi tiêu 7 Ngày Qua</h2>
+          <span class="badge badge-red">Canvas Bar Chart</span>
+        </div>
+        <canvas id="barChartCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="filter-bar" id="categoryChips">
+      <button class="chip active" data-cat="all">Tất cả</button>
+      <button class="chip" data-cat="Thực phẩm">Thực phẩm</button>
+      <button class="chip" data-cat="Học tập">Học tập</button>
+      <button class="chip" data-cat="Du lịch & Di chuyển">Du lịch</button>
+      <button class="chip" data-cat="Thiết bị & Đồ dùng">Thiết bị</button>
+      <button class="chip" data-cat="Giải trí">Giải trí</button>
+      <button class="chip" data-cat="Khác">Khác</button>
+    </div>
+
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Tìm kiếm tên cửa hàng, ghi chú...">
+
+    <!-- Transaction List Container -->
+    <div class="tx-list" id="txListContainer"></div>
+  </div>
+
+  <!-- OCR Scanner & Review Modal -->
+  <div class="modal" id="scanModal">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 1.1rem;">Quét & Phân Tích Hóa Đơn</h3>
+        <button id="closeModalBtn" style="background: none; border: none; color: white; font-size: 1.4rem; cursor: pointer;">✕</button>
+      </div>
+
+      <!-- Crop Frame & Laser Simulator -->
+      <div class="crop-frame-simulator">
+        <div class="laser-line"></div>
+        <p id="scanPlaceholderText" style="color: rgba(255,255,255,0.7); font-size: 0.85rem; text-align: center; padding: 12px;">
+          Tải ảnh hóa đơn hoặc chọn hóa đơn mẫu bên dưới để test Heuristic Regex
+        </p>
+        <img id="previewImg" style="max-height: 100%; display: none; object-fit: contain;">
+      </div>
+
+      <!-- Quick Test Receipts Buttons -->
+      <div class="sample-receipt-chips">
+        <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">Mẫu nhanh:</span>
+        <button class="sample-btn" data-sample="winmart">WinMart (60.000đ)</button>
+        <button class="sample-btn" data-sample="highlands">Highlands (84.000đ)</button>
+        <button class="sample-btn" data-sample="fahasa">Fahasa (200.000đ)</button>
+      </div>
+
+      <!-- Dual Camera & Gallery Input Buttons -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+        <input type="file" id="imageInput" accept="image/*" style="display: none;">
+        
+        <button id="cameraBtn" class="btn-primary" style="justify-content: center; background: #00E676; color: #12121D;">
+          📸 Chụp Từ Camera
+        </button>
+        <button id="uploadBtn" class="btn-primary" style="justify-content: center;">
+          🖼️ Chọn Tệp Ảnh
+        </button>
+      </div>
+
+      <!-- OCR Status -->
+      <div id="ocrLoading" style="display: none; text-align: center; padding: 12px; color: var(--accent-green); font-weight: 600;">
+        ⚙️ Đang phân tích văn bản & chạy Thuật toán Heuristic Regex...
+      </div>
+
+      <!-- Edit Form (Appears after OCR parsing) -->
+      <form id="reviewForm" style="display: none; margin-top: 16px;">
+        <div class="form-group">
+          <label>Tên Nơi Bán / Thương Hiệu</label>
+          <input type="text" id="merchantInput" required>
+        </div>
+
+        <div class="form-group">
+          <label>Tổng Số Tiền (VND)</label>
+          <input type="number" id="amountInput" required style="font-size: 1.2rem; font-weight: 700; color: var(--accent-green);">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Ngày Giao Dịch</label>
+            <input type="date" id="dateInput" required>
+          </div>
+          <div class="form-group">
+            <label>Danh Mục</label>
+            <select id="categorySelect">
+              <option value="Thực phẩm">Thực phẩm</option>
+              <option value="Học tập">Học tập</option>
+              <option value="Du lịch & Di chuyển">Du lịch & Di chuyển</option>
+              <option value="Thiết bị & Đồ dùng">Thiết bị & Đồ dùng</option>
+              <option value="Giải trí">Giải trí</option>
+              <option value="Khác">Khác</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Ghi Chú Giao Dịch</label>
+          <input type="text" id="noteInput" placeholder="Ví dụ: Cà phê cùng bạn học...">
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; margin-top: 12px; padding: 14px;">
+          ✅ LƯU VÀO SỔ CHI TIÊU
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Image Preview Modal -->
+  <div class="modal" id="imageViewerModal">
+    <div class="modal-content" style="text-align: center; max-width: 500px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="font-size: 1.1rem;">Ảnh Hóa Đơn Đã Lưu</h3>
+        <button id="closeImageModalBtn" style="background: none; border: none; color: white; font-size: 1.4rem; cursor: pointer;">✕</button>
+      </div>
+      <img id="fullSizeReceiptImg" style="max-width: 100%; max-height: 70vh; border-radius: 12px; object-fit: contain;">
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
